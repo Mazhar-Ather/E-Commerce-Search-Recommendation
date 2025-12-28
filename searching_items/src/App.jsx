@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import SearchBox from "./components/SearchBox";
 import Trie from "./datastructures/TrieTree";
 import "./App.css";
+import UI from "./components/UI";
 
 function App() {
   const [suggestions, setSuggestions] = useState([]);
@@ -19,45 +20,72 @@ function App() {
     loadStats();
   }, []);
   
-  const loadProducts = async () => {
+  // In App.jsx - Update loadProducts function
+const loadProducts = async () => {
     try {
-      console.log("🔄 Loading products from database...");
-      
-      const response = await fetch('http://localhost:5000/api/products');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const productNames = await response.json();
-      
-      if (!Array.isArray(productNames)) {
-        throw new Error('Invalid data received from server');
-      }
-      
-      if (productNames.length === 0) {
-        throw new Error('No products found in database. Please run the scraper first.');
-      }
-      
-      // Initialize Trie with database products
-      const newTrie = new Trie();
-      newTrie.loadWords(productNames);
-      
-      setTrie(newTrie);
-      setLoading(false);
-      setError(null);
-      console.log(`✅ Loaded ${productNames.length} products into Trie`);
-      
+        console.log("🔄 Loading products from database...");
+        
+        const response = await fetch('http://localhost:5000/api/products');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Handle both response formats (debug and simple)
+        let productNames;
+        if (data.products && Array.isArray(data.products)) {
+            // Debug response format
+            productNames = data.products;
+            console.log("📊 Debug Response:", data.debug);
+        } else if (Array.isArray(data)) {
+            // Simple array format
+            productNames = data;
+        } else {
+            throw new Error('Unexpected response format from server');
+        }
+        
+        console.log(`📦 Received ${productNames.length} product names for Trie`);
+        
+        if (!Array.isArray(productNames)) {
+            throw new Error('Invalid data received from server');
+        }
+        
+        if (productNames.length === 0) {
+            throw new Error('No valid product names found in database');
+        }
+        
+        // Initialize Trie with database products
+        const newTrie = new Trie();
+        newTrie.loadWords(productNames);
+        
+        // Verify Trie loaded correctly
+        const trieWordCount = newTrie.count();
+        console.log(`✅ Trie loaded: ${trieWordCount} words`);
+        console.log(`📈 Trie vs Received: ${trieWordCount}/${productNames.length}`);
+        
+        // Debug: Check if all words were inserted
+        if (trieWordCount < productNames.length) {
+            console.warn(`⚠️  Trie count (${trieWordCount}) < Received count (${productNames.length})`);
+            console.warn("   Possible duplicates or insertion issues");
+            
+            // Check for duplicates
+            const uniqueNames = new Set(productNames);
+            console.log(`   Unique names: ${uniqueNames.size}`);
+        }
+        
+        setTrie(newTrie);
+        setLoading(false);
+        setError(null);
+        
     } catch (err) {
-      console.error('Error loading products:', err);
-      setError(err.message);
-      setLoading(false);
-      
-      // Show error message instead of fallback sample data
-      setTrie(null);
+        console.error('❌ Error loading products:', err);
+        setError(err.message);
+        setLoading(false);
+        setTrie(null);
     }
-  };
-
+};
   const loadStats = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/stats');
@@ -89,130 +117,138 @@ function App() {
 
   const handleSuggestionSelect = (suggestion) => {
     console.log("Selected:", suggestion);
-    // You can implement navigation or detailed search here
     alert(`You selected: ${suggestion}`);
   };
 
+  // If loading, show loading state inside UI component
   if (loading) {
     return (
-      <div className="app-container loading">
-        <div className="loader">
-          <div className="spinner"></div>
-          <p>Loading products from database...</p>
-          <p className="loading-text">Please ensure:</p>
-          <ul className="loading-checklist">
-            <li>✅ MySQL server is running</li>
-            <li>✅ Python scraper has populated the database</li>
-            <li>✅ Backend server is running on port 5000</li>
-          </ul>
+      <UI>
+        <div className="app-container loading">
+          <div className="loader">
+            <div className="spinner"></div>
+            <p>Loading products from database...</p>
+            <p className="loading-text">Please ensure:</p>
+            <ul className="loading-checklist">
+              <li>✅ MySQL server is running</li>
+              <li>✅ Python scraper has populated the database</li>
+              <li>✅ Backend server is running on port 5000</li>
+            </ul>
+          </div>
         </div>
-      </div>
+      </UI>
     );
   }
 
+  // If error, show error state inside UI component
   if (error) {
     return (
-      <div className="app-container error">
-        <div className="error-container">
-          <div className="error-icon">⚠️</div>
-          <h2>Failed to Load Products</h2>
-          <p className="error-message">{error}</p>
-          
-          <div className="troubleshooting">
-            <h4>🔧 Troubleshooting Steps:</h4>
-            <ol>
-              <li>Start MySQL server</li>
-              <li>Run your Python scraper to populate data</li>
-              <li>Start backend server: <code>node server.js</code></li>
-              <li>Check if API is accessible: <a href="http://localhost:5000/api/products" target="_blank" rel="noopener noreferrer">http://localhost:5000/api/products</a></li>
-            </ol>
-          </div>
-          
-          <button onClick={handleRetry} className="retry-button">
-            🔄 Retry Loading
-          </button>
-          
-          <div className="database-info">
-            <h4>📊 Database Connection Info:</h4>
-            <p>Host: localhost</p>
-            <p>Database: ecommerce</p>
-            <p>Table: daraz_products</p>
+      <UI>
+        <div className="app-container error">
+          <div className="error-container">
+            <div className="error-icon">⚠️</div>
+            <h2>Failed to Load Products</h2>
+            <p className="error-message">{error}</p>
+            
+            <div className="troubleshooting">
+              <h4>🔧 Troubleshooting Steps:</h4>
+              <ol>
+                <li>Start MySQL server</li>
+                <li>Run your Python scraper to populate data</li>
+                <li>Start backend server: <code>node server.js</code></li>
+                <li>Check if API is accessible: <a href="http://localhost:5000/api/products" target="_blank" rel="noopener noreferrer">http://localhost:5000/api/products</a></li>
+              </ol>
+            </div>
+            
+            <button onClick={handleRetry} className="retry-button">
+              🔄 Retry Loading
+            </button>
+            
+            <div className="database-info">
+              <h4>📊 Database Connection Info:</h4>
+              <p>Host: localhost</p>
+              <p>Database: ecommerce</p>
+              <p>Table: daraz_products</p>
+            </div>
           </div>
         </div>
-      </div>
+      </UI>
     );
   }
 
+  // Main content with search functionality
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>📱 Smartphone Search</h1>
-        <p className="subtitle">
-          Search through {trie ? trie.count().toLocaleString() : 'thousands of'} smartphone products
-        </p>
-        {stats && (
-          <div className="header-stats">
-            <span className="stat-badge">📊 {stats.total_products} Products</span>
-            <span className="stat-badge">💰 {stats.min_price} - {stats.max_price}</span>
-            {stats.last_updated && (
-              <span className="stat-badge">🕒 Updated: {stats.last_updated}</span>
-            )}
-          </div>
-        )}
-      </header>
-
-      <main className="app-main">
+    <UI>
+      <div className="main-content">
         <div className="search-container">
+          <h2 className="search-title">🔍 Search Products</h2>
+          <p className="search-description">
+            Search through {trie ? trie.count().toLocaleString() : 'thousands of'} products in our database
+          </p>
+          
           <SearchBox
             onInputChange={handleInputChange}
             suggestions={suggestions}
             onSuggestionSelect={handleSuggestionSelect}
-            placeholder="Search smartphones (e.g., iPhone, Samsung, Pixel...)"
+            placeholder="Type product name (e.g., iPhone, Samsung, Laptop...)"
           />
           
-          {stats && (
-            <div className="stats-container">
-              <div className="stat-item">
-                <span className="stat-label">Total Products:</span>
-                <span className="stat-value">{stats.total_products}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Price Range:</span>
-                <span className="stat-value">₹{stats.min_price} - ₹{stats.max_price}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Categories:</span>
-                <span className="stat-value">{stats.categories || 1}</span>
-              </div>
+          {suggestions.length > 0 && (
+            <div className="suggestions-summary">
+              <p>Found {suggestions.length} suggestions</p>
             </div>
           )}
         </div>
 
-        <div className="instructions">
-          <h3>💡 How to use:</h3>
-          <ul>
-            <li>Start typing to see instant suggestions</li>
-            <li>Click on a suggestion to autocomplete</li>
-            <li>Press Enter to search</li>
-            <li>All data is loaded from MySQL database</li>
-          </ul>
-          
-          {trie && (
-            <div className="trie-info">
-              <p><strong>Trie Stats:</strong> {trie.count()} words loaded • Memory efficient search</p>
+        {stats && (
+          <div className="stats-section">
+            <h3>📊 Database Statistics</h3>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">📦</div>
+                <div className="stat-content">
+                  <div className="stat-value">{stats.total_products}</div>
+                  <div className="stat-label">Total Products</div>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">💰</div>
+                <div className="stat-content">
+                  <div className="stat-value">{stats.min_price || 'N/A'}</div>
+                  <div className="stat-label">Min Price</div>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">💎</div>
+                <div className="stat-content">
+                  <div className="stat-value">{stats.max_price || 'N/A'}</div>
+                  <div className="stat-label">Max Price</div>
+                </div>
+              </div>
+              
+              <div className="stat-card">
+                <div className="stat-icon">🏷️</div>
+                <div className="stat-content">
+                  <div className="stat-value">{stats.categories || 1}</div>
+                  <div className="stat-label">Categories</div>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-      </main>
+          </div>
+        )}
 
-      <footer className="app-footer">
-        <p>Powered by Trie Data Structure • Connected to MySQL Database</p>
-        <p className="tech-stack">
-          React • Node.js • MySQL • Trie Algorithm • 
-          <span className="data-source">Data Source: Daraz.pk Smartphones</span>
-        </p>
-      </footer>
-    </div>
+        {trie && (
+          <div className="trie-info">
+            <h3>⚡ Trie Search Engine</h3>
+            <p>
+              Powered by Trie data structure • {trie.count().toLocaleString()} words indexed • Instant prefix search
+            </p>
+          </div>
+        )}
+      </div>
+    </UI>
   );
 }
 
